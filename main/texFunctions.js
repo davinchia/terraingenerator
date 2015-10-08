@@ -2,8 +2,6 @@
 /*
 DAVIN CHIA AND JOSEPH BUTTON
 
-CS461 FINAL PROJECT
-
 A HIGHLY REALISTIC WORLD IN THE BROWSER
 
 Library file for final project textured functions
