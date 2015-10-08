@@ -1,0 +1,329 @@
+
+<!--
+	
+DAVIN CHIA AND JOSEPH BUTTON
+
+CS461 FINAL PROJECT
+
+A HIGHLY REALISTIC WORLD IN THE BROWSER
+
+SOURCE HTML
+
+-->
+
+<!DOCTYPE html>
+
+<html>
+   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<head>
+
+    <title>Terrain_HHD</title>
+    <script type="text/javascript" src="../lib/webgl-utils.js"></script>
+	<script type="text/javascript" src="../lib/MV.js"></script>
+	<script type="text/javascript" src="../lib/InitShaders.js"></script>
+
+	<script type="text/javascript" src="virtualTerrain.js"></script>
+	<script type="text/javascript" src="texFunctions.js"></script>
+    <script type="text/javascript" src="tex_fix.js"></script>
+	
+	<script id="vertex-shader" type="x-shader/x-vertex">
+
+			attribute vec4 a_Position;
+			attribute vec2 a_TextCoord;
+			
+			attribute vec3 a_Normal;
+			attribute vec4 a_LightPosition;
+
+
+			
+			uniform mat4 u_Projection;
+			uniform mat4 u_ViewMatrix;
+			uniform mat4 u_ModelMatrix;
+
+			
+			uniform int u_drawType;
+			
+			varying vec2 v_TextCoord;
+			varying vec3 v_Position;
+			varying vec3 v_Normal;
+			varying vec3 v_LightPosition;
+				
+			vec4 waterPos, waterNorm;
+		
+			uniform float u_time; 
+			uniform vec3 u_camPos;
+	
+			float currTime;
+			vec4 currPos;
+
+			void main(){
+				gl_PointSize = 2.5;
+				
+				//skybox
+				if(u_drawType == 0){
+
+					gl_Position = u_Projection*mat4(mat3(u_ViewMatrix))*u_ModelMatrix* a_Position;	
+					v_Position = (mat4(mat3(u_ViewMatrix))*u_ModelMatrix*a_Position).xyz;	
+	
+				
+					v_TextCoord = a_TextCoord;
+				
+				}
+				//water
+				else if(u_drawType == 4){
+					//this is exclusively for the water
+					waterPos = vec4(a_Position.x,a_Position.y,a_Position.z,a_Position.w);
+					
+					gl_Position = u_Projection*u_ViewMatrix*u_ModelMatrix*waterPos;
+					v_Position = (u_ModelMatrix*waterPos).xyz;
+					
+					v_LightPosition = (u_Projection*u_ModelMatrix*a_LightPosition).xyz;
+					
+					v_Normal = waterNorm.xyz;
+					v_TextCoord = a_TextCoord;
+				
+				}
+				// rain; we are using the GPU to do calculations for the rain in order to improve FPS
+				else if(u_drawType == 1){
+				
+					//v_Position represents the initial location of the rain droplet
+					//v_TextCoord represents the initial velocity
+					//we use the difference between u_Time and u_timeBegin to calculate displacement\
+					//currPos = (a_Position + vec4(u_camPos, 1.0)) - (u_time * vec4(0, abs(-a_TextCoord.y*u_time), 0, 0));
+					currPos = a_Position - (u_time * vec4(0, abs(-a_TextCoord.y*u_time), 0, 0));
+					gl_Position = u_Projection*mat4(mat3(u_ViewMatrix))*u_ModelMatrix*currPos;	
+					// v_Position = (u_ModelMatrix*a_Position).xyz;
+					v_Position = (u_ModelMatrix*currPos).xyz;	
+					v_LightPosition = (u_Projection*u_ModelMatrix*a_LightPosition).xyz;
+				
+				}
+
+				//terrain and clouds
+				else if(u_drawType ==3 || u_drawType ==2){
+					gl_Position = u_Projection*u_ViewMatrix*u_ModelMatrix* a_Position;	
+					v_Position = (u_ModelMatrix*a_Position).xyz;	
+				
+					v_LightPosition = (u_Projection*u_ModelMatrix*a_LightPosition).xyz;
+				
+					v_Normal = mat3(u_Projection*u_ModelMatrix)*a_Normal;
+				
+				
+					v_TextCoord = a_TextCoord;
+				
+				}
+		
+						
+			}
+		</script>
+		
+    <script id="fragment-shader" type="x-shader/x-fragment" >
+        precision highp float;
+
+		//attributes
+		varying vec2 v_TextCoord;
+		varying vec3 v_Position;
+		varying vec3 v_Normal;
+		varying vec3 v_LightPosition;	
+		uniform int drawType;
+		
+		//lighting
+		uniform vec3 light_ambient;
+		uniform vec3 light_diffuse;
+		uniform vec3 light_specular;
+		uniform float shininess;
+			
+		//textures
+		uniform sampler2D u_Sampler; 
+		uniform sampler2D u_BumpSampler;
+		uniform sampler2D u_SandSampler;
+		uniform sampler2D u_SnowSampler;
+		uniform sampler2D u_bGrassSampler;
+		uniform samplerCube u_CubeSampler;
+		
+		//lighting
+		vec3 L, N, V, H, P;
+		vec3 ambient, diffuse, specular, color, normal;
+		vec4 light_color;
+		float alph;
+		vec4 full;
+		void main(){
+		
+				
+				//drawTypes
+				//0 = skybox and DIRECT textures
+				//1 = rain
+				//2 = clouds
+				//3 = terrain 
+				//4 = water
+
+
+				//skybox
+				if(drawType == 0){
+					
+					//water_tex
+					full =	texture2D(u_Sampler, v_TextCoord).zyxw;
+					light_color = full/1.5;
+					
+				
+				}
+
+				// //rain
+				else if (drawType == 1){
+					
+					vec4 full =	texture2D(u_Sampler, v_TextCoord).xyzw;
+					//vec4 norm = texture2D(u_BumpSampler, v_TextCoord).xyzw;
+					
+					alph = (1000.0-v_Position.y)/1000.0;
+					light_color = vec4(0.1,0.4,0.6,alph);
+					
+
+				}
+
+				//clouds
+				else if (drawType ==2){
+					vec4 full =	texture2D(u_Sampler, v_TextCoord).xyzw;
+					alph = texture2D(u_BumpSampler, v_TextCoord).z;	
+					light_color = vec4(full.xyz,alph);
+				}
+
+				//terrain
+				else if(drawType ==3){
+					//grabs all the relevant textures for the terrain
+					vec4 grass =texture2D(u_Sampler, v_TextCoord);
+					vec4 snow = texture2D(u_SnowSampler, v_TextCoord);
+					vec4 bgrass = texture2D(u_SandSampler, v_TextCoord);
+					vec4 sand = texture2D(u_bGrassSampler, v_TextCoord);
+					
+					//these mix functions texture the terrain according to the height of the fragment
+					normal=v_Normal;
+
+					color = grass.xyz;
+					
+					//sand
+					color = mix(
+						sand.xyz,
+						color,
+						clamp(v_Position.y+60.0,0.1,1.0)
+					);
+
+					//sandFade for a more realistic look
+					color = mix(
+					color,
+					-color,
+					clamp(v_Position.y-70.0,0.0,0.8)
+					);
+
+					//grass for the bottom of the water
+					color = mix(
+						color,
+						bgrass.xyz,
+						clamp(v_Position.y-70.0,0.0,1.0)
+					);
+
+					//snow for the mountain peaks
+					color = mix(
+					color,
+					snow.xyz,
+					clamp((v_Position.y-170.0)/1.2,0.0,0.9)
+					);
+					
+
+					//following are lighting calculations
+					P = v_Position;
+					
+					N = normalize(normal);
+					L = normalize(v_LightPosition - P);
+					V = normalize( -P);
+					H = normalize(L+V);
+
+					ambient = color * light_ambient;
+					diffuse = color * max(dot(L, N), 0.0)* light_diffuse;
+					specular = max(color * pow(max(dot(N, H),0.0), shininess) * light_specular, 0.0) ;
+					
+					light_color = vec4(ambient+diffuse+specular,1.0);
+				}
+
+				//water
+				else if(drawType == 4){
+					
+					//textures for the water
+					vec4 full =	texture2D(u_Sampler, v_TextCoord).xyzw;
+					vec4 norm = texture2D(u_BumpSampler, v_TextCoord).xyzw;
+					
+
+					//lighting calculations
+					color = full.xyz;
+					normal=norm.xyz;
+					P = v_Position;
+
+					N = normalize(normal);
+					L = normalize(v_LightPosition - P);
+					V = normalize( -P);
+					H = normalize(L+V);
+
+					//simulates reflections and non-uniform coloured water by grabbing the 
+					//texture that is above the water and mixing it with the water texture
+					vec2 faux = vec2((P.x+norm.x)/2.0,(P.z+norm.z)/2.0 );
+					faux = normalize(faux);
+
+					//snowsampler is used here to get colours from the skybox texture
+					color = mix( texture2D(u_SnowSampler,faux).zyx,color, 0.3);
+
+					//reflections
+					ambient = color * light_ambient;
+					diffuse = color * max(dot(L, N), 0.0)* light_diffuse;
+					specular = max(color * pow(max(dot(N, H),0.0), shininess) * light_specular, 0.0) ;
+
+					light_color = vec4(ambient+specular+diffuse, 0.7);
+				}
+
+				gl_FragColor = light_color;
+	   }
+			
+    </script>
+
+	
+</head>
+<style>
+#hud {
+	position: absolute; 
+	z-index: 1;
+	left: 8px;
+	top: 8px;
+	color: white;
+	}
+#location {
+	color: white;
+}
+	
+</style>
+<body  >
+	<div class="row">
+	 <div class="col-md-8">
+		<section >
+			<canvas id="gl-canvas" width="640" height="640" align="left">
+			You need a better web browser
+			</canvas>
+			<div id="hud">
+				 <div>Location: <span style="color:red" id="location"></span>   </div>
+				 <div>Heading: <span style="color:red" id="angle"></span></div>
+			</div>
+		</section>
+		</div>
+	 <div class="col-md-4">
+	
+	
+	<br>Controls for our world:
+	<br>wasd- control direction of camera
+	<br>arrowKeys -  lateral movements
+	<br>q,e - up and down
+	
+	<div>
+		<p>Note that the program might experience slight pauses when generating a new tile. Patience is key.</p>
+
+		<p>Also note that this program is currently supported on all browsers for Windows and Linux. Mac users should use Firefox, or Waterfox, if possible.</p>
+	</div>
+	
+
+	</body>
+</html>
