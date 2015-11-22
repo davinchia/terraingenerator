@@ -7,3 +7,8 @@ This project initially started as a upper level computer graphics final project.
 As WebGL is an experimental technology, the code might not run as smoothly on all browsers. It currently has strange errors on the Mac, and Mac users should use Firefox, or WaterFox, if possible. 
 
 Feel free to look through and borrow the code.
+
+
+This can be viewed at:
+
+http://www.cs.middlebury.edu/~jbutton/431_Final/main/
