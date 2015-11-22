@@ -12,4 +12,4 @@ Feel free to look through and borrow the code.
 This can be viewed at:
 http://www.cs.middlebury.edu/~jbutton/431_Final/main/
 
-Note that the more powerful your processor, the more detailed the program. The current web version is optimised for entry-level laptops, and is not in its full glory.
+Note that the more powerful your processor, the more detailed the world. The current hosted version is optimised for entry-level laptops, and the program is not in its full glory.
